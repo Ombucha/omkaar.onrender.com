@@ -1,51 +1,37 @@
-from flask import Flask, render_template_string, request, redirect, url_for, session
+from flask import Flask, render_template_string, request
 import gocomics
 from datetime import datetime
 import os
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 PASSWORD = os.environ.get('PASSWORD', '1234')
 
 @app.route('/comics', methods=['GET', 'POST'])
 def comics_page():
-    if 'authenticated' not in session:
-        if request.method == 'POST':
-            if request.form.get('password') == PASSWORD:
-                session['authenticated'] = True
-                return redirect(url_for('comics_page'))
-            else:
-                error = 'Incorrect password.'
-                return render_template_string('''
-                <form method="post" style="max-width:340px;margin:5em auto;padding:2em 2em 1.5em 2em;background:#fff;border-radius:12px;box-shadow:0 4px 24px #ff7e5f22;text-align:center;">
-                    <h2 style="color:#ff7e5f;">Enter Password</h2>
-                    <input type="password" name="password" placeholder="Password" style="width:100%;padding:0.7em 1em;margin-bottom:1em;border-radius:8px;border:1.5px solid #ff7e5f;font-size:1.1em;" required>
-                    <button type="submit" style="background:linear-gradient(90deg,#ff7e5f 0%,#feb47b 100%);color:#fff;font-size:1.1em;font-weight:700;border:none;border-radius:8px;padding:0.7em 0;width:100%;cursor:pointer;">Login</button>
-                    <div style="color:#d7263d;margin-top:1em;">{{error}}</div>
-                </form>
-                ''', error=error)
-        return render_template_string('''
-        <form method="post" style="max-width:340px;margin:5em auto;padding:2em 2em 1.5em 2em;background:#fff;border-radius:12px;box-shadow:0 4px 24px #ff7e5f22;text-align:center;">
-            <h2 style="color:#ff7e5f;">Enter Password</h2>
-            <input type="password" name="password" placeholder="Password" style="width:100%;padding:0.7em 1em;margin-bottom:1em;border-radius:8px;border:1.5px solid #ff7e5f;font-size:1.1em;" required>
-            <button type="submit" style="background:linear-gradient(90deg,#ff7e5f 0%,#feb47b 100%);color:#fff;font-size:1.1em;font-weight:700;border:none;border-radius:8px;padding:0.7em 0;width:100%;cursor:pointer;">Login</button>
-        </form>
-        ''')
-    comics = gocomics.search()
-    selected_comic = request.args.get('comic')
-    selected_date = request.args.get('date')
-    comic_img_html = ''
     error = ''
-    if selected_comic and selected_date:
-        try:
-            dt = datetime.strptime(selected_date, '%Y-%m-%d').date()
-            comic = gocomics.Comic(selected_comic, dt)
-            if comic.image_url:
-                comic_img_html = f'<h3>Result:</h3><img src="{comic.image_url}" alt="{selected_comic}" style="max-width:100%;height:auto;">'
-            else:
-                error = 'Comic not found.'
-        except Exception as e:
-            error = f'Error: {str(e)}'
+    comic_img_html = ''
+    selected_comic = ''
+    selected_date = ''
+    comics = gocomics.search()
+    if request.method == 'POST':
+        if request.form.get('password') == PASSWORD:
+            selected_comic = request.form.get('comic')
+            selected_date = request.form.get('date')
+            if selected_comic and selected_date:
+                try:
+                    dt = datetime.strptime(selected_date, '%Y-%m-%d').date()
+                    comic = gocomics.Comic(selected_comic, dt)
+                    if comic.image_url:
+                        comic_img_html = f'<h3>Result:</h3><img src="{comic.image_url}" alt="{selected_comic}" style="max-width:100%;height:auto;">'
+                    else:
+                        error = 'Comic not found.'
+                except Exception as e:
+                    error = f'Error: {str(e)}'
+        else:
+            error = 'Incorrect password.'
+    elif request.method == 'GET':
+        selected_comic = request.args.get('comic', '')
+        selected_date = request.args.get('date', '')
     html = '''
     <!DOCTYPE html>
     <html lang="en">
@@ -267,41 +253,63 @@ def comics_page():
                 margin: auto;
             }
             .select2-selection__clear > span { display: none; }
+            .password-group {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                width: 100%;
+                margin-bottom: 1.2em;
+            }
+            .password-label {
+                font-weight: 700;
+                color: #333;
+                margin-bottom: 0.3em;
+                display: flex;
+                align-items: center;
+                font-size: 1.08em;
+            }
+            .password-label i {
+                color: #ff7e5f;
+                margin-right: 0.5em;
+            }
+            .password-input {
+                width: 100%;
+                padding: 0.5em 1em;
+                border-radius: 10px;
+                border: 1.5px solid #ff7e5f;
+                font-size: 1.1em;
+                background: #fff8f3;
+                box-shadow: 0 2px 8px rgba(255,126,95,0.07);
+                outline: none;
+                transition: border 0.2s, box-shadow 0.2s, background 0.2s;
+                margin-bottom: 0.5em;
+                box-sizing: border-box;
+                height: 38px;
+            }
         </style>
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                var correct = false;
-                while (!correct) {
-                    var pwd = prompt('Enter password to access the site:');
-                    if (pwd === "1234") {
-                        correct = true;
-                    } else {
-                        alert('Incorrect password!');
-                    }
-                }
-                var form = document.querySelector('form');
-                var btn = form.querySelector('button[type="submit"]');
-                var loader = document.querySelector('.loader');
-                form.addEventListener('submit', function() {
-                    btn.style.display = 'none';
-                    loader.style.display = 'block';
-                });
-                // Enable search in select
-                $("#comic").select2({
-                    width: '100%',
-                    placeholder: 'Select or search for a comic',
-                    allowClear: true,
-                    dropdownAutoWidth: true
-                });
+        $(function() {
+            $("#comic").select2({
+                width: '100%',
+                placeholder: 'Select or search for a comic',
+                allowClear: true,
+                dropdownAutoWidth: true
             });
+        });
         </script>
     </head>
     <body>
         <div class="container">
             <h2><i class="fa-solid fa-book-open"></i> Comics Viewer</h2>
-            <form method="get">
+            <form method="post">
+                <hr style="width:100%;border:none;border-top:2px solid #ff7e5f;box-shadow:0 2px 8px #ff7e5f44,0 0.5px 0 #feb47b; margin:0 0 0.7em 0;">
+                <div class="password-group">
+                    <label for="password" class="password-label"><i class="fa-solid fa-lock"></i> Password:</label>
+                    <input type="password" id="password" name="password" class="password-input" required autocomplete="current-password">
+                </div>
+                <hr style="width:100%;border:none;border-top:2px solid #ff7e5f;box-shadow:0 2px 8px #ff7e5f44,0 0.5px 0 #feb47b; margin:0.3em 0 0.7em 0;">
                 <label for="date"><i class="fa-solid fa-calendar-days"></i> Select Date:</label>
                 <input type="date" id="date" name="date" value="{{ selected_date or '' }}" required>
                 <label for="comic"><i class="fa-solid fa-book-open"></i> Select Comic:</label>
@@ -311,7 +319,6 @@ def comics_page():
                     {% endfor %}
                 </select>
                 <button type="submit"><i class="fa-solid fa-eye"></i> Show Comic</button>
-                <div class="loader"><i class="fa-solid fa-spinner"></i></div>
             </form>
             <div class="result">
                 {% if comic_img_html %}{{ comic_img_html|safe }}{% endif %}
@@ -405,4 +412,4 @@ def home():
     ''')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=False)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=True)

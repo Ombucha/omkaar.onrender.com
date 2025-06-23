@@ -1,11 +1,36 @@
-from flask import Flask, render_template_string, request
+from flask import Flask, render_template_string, request, redirect, url_for, session
 import gocomics
 from datetime import datetime
+import os
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+PASSWORD = os.environ.get('PASSWORD', '1234')
 
-@app.route('/comics', methods=['GET'])
+@app.route('/comics', methods=['GET', 'POST'])
 def comics_page():
+    if 'authenticated' not in session:
+        if request.method == 'POST':
+            if request.form.get('password') == PASSWORD:
+                session['authenticated'] = True
+                return redirect(url_for('comics_page'))
+            else:
+                error = 'Incorrect password.'
+                return render_template_string('''
+                <form method="post" style="max-width:340px;margin:5em auto;padding:2em 2em 1.5em 2em;background:#fff;border-radius:12px;box-shadow:0 4px 24px #ff7e5f22;text-align:center;">
+                    <h2 style="color:#ff7e5f;">Enter Password</h2>
+                    <input type="password" name="password" placeholder="Password" style="width:100%;padding:0.7em 1em;margin-bottom:1em;border-radius:8px;border:1.5px solid #ff7e5f;font-size:1.1em;" required>
+                    <button type="submit" style="background:linear-gradient(90deg,#ff7e5f 0%,#feb47b 100%);color:#fff;font-size:1.1em;font-weight:700;border:none;border-radius:8px;padding:0.7em 0;width:100%;cursor:pointer;">Login</button>
+                    <div style="color:#d7263d;margin-top:1em;">{{error}}</div>
+                </form>
+                ''', error=error)
+        return render_template_string('''
+        <form method="post" style="max-width:340px;margin:5em auto;padding:2em 2em 1.5em 2em;background:#fff;border-radius:12px;box-shadow:0 4px 24px #ff7e5f22;text-align:center;">
+            <h2 style="color:#ff7e5f;">Enter Password</h2>
+            <input type="password" name="password" placeholder="Password" style="width:100%;padding:0.7em 1em;margin-bottom:1em;border-radius:8px;border:1.5px solid #ff7e5f;font-size:1.1em;" required>
+            <button type="submit" style="background:linear-gradient(90deg,#ff7e5f 0%,#feb47b 100%);color:#fff;font-size:1.1em;font-weight:700;border:none;border-radius:8px;padding:0.7em 0;width:100%;cursor:pointer;">Login</button>
+        </form>
+        ''')
     comics = gocomics.search()
     selected_comic = request.args.get('comic')
     selected_date = request.args.get('date')
@@ -380,4 +405,4 @@ def home():
     ''')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=False)
